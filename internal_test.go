@@ -11,11 +11,8 @@ import (
 //	Modify this url with your rabbitMQ configuration
 const rabbitUrl = "amqp://rabbitmq:rabbitmq@localhost:5672/"
 
-//	Implementation of MessageHandler
-type myHandler struct {
-}
 //	Handles the messages from the defined queue
-func (mh *myHandler) Handle(messages <-chan amqp.Delivery, done chan bool) {
+func Handle(messages <-chan amqp.Delivery, done chan bool) {
 
 	//	Iterating the messages channel
 	for msg := range messages {
@@ -101,7 +98,7 @@ func TestConsume(t *testing.T) {
 	queue.PrefetchCount = 1 //	Receives one per one
 
 	//	Setting consumer configuration (passing the message handler)
-	consumer := NewConsumerConfig(&myHandler{}, false)
+	consumer := NewConsumerConfig(Handle, false)
 
 	//	Consuming the messages from the queue
 	err := NewRabbitCli(rabbitUrl).Consume(exc, queue, consumer)

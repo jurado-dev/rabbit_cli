@@ -39,12 +39,8 @@ func NewQueueConfig(name string, durable, exclusive bool) QueueConfig {
 	return QueueConfig{Name: name, Durable: durable, Exclusive: exclusive}
 }
 
-type MessageHanlder interface {
-	Handle(messages <-chan amqp.Delivery, done chan bool)
-}
-
 type ConsumerConfig struct {
-	Handler   MessageHanlder
+	Handler   func(messages <-chan amqp.Delivery, done chan bool)
 	Consumer  string
 	AutoAck   bool
 	Exclusive bool
@@ -53,8 +49,11 @@ type ConsumerConfig struct {
 	Args      amqp.Table
 }
 
-func NewConsumerConfig(handler MessageHanlder, autoAck bool) ConsumerConfig {
-	return ConsumerConfig{AutoAck: autoAck, Handler: handler}
+func NewConsumerConfig(handler func(messages <-chan amqp.Delivery, done chan bool), autoAck bool) ConsumerConfig {
+	c := ConsumerConfig{}
+	c.AutoAck = autoAck
+	c.Handler = handler
+	return c
 }
 
 type MessageConfig struct {
@@ -73,7 +72,12 @@ func NewMessageConfig(data interface{}, routeKey string) (MessageConfig, error) 
 		return MessageConfig{}, err
 	}
 
-	return MessageConfig{Body: body, RouteKey: routeKey, ContentType: "text/plain"}, nil
+	corId, err := NewCorrelationId()
+	if err != nil {
+		return MessageConfig{}, err
+	}
+
+	return MessageConfig{Body: body, RouteKey: routeKey, ContentType: "text/plain", CorrelationId:corId}, nil
 }
 
 //	NewCorrelationId generates a unique id using the linux tool uuidgen
@@ -183,7 +187,7 @@ func (rc *RabbitCli) Consume(exc ExchangeConfig, queue QueueConfig, consumer Con
 	}
 
 	done := make(chan bool)
-	go consumer.Handler.Handle(messages, done)
+	go consumer.Handler(messages, done)
 	<-done
 
 	return nil
