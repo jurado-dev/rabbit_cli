@@ -1,11 +1,13 @@
 package rabbit_cli
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/streadway/amqp"
 	"log"
-	"os/exec"
 )
 
 type ExchangeConfig struct {
@@ -80,13 +82,15 @@ func NewMessageConfig(data interface{}, routeKey string) (MessageConfig, error) 
 	return MessageConfig{Body: body, RouteKey: routeKey, ContentType: "text/plain", CorrelationId:corId}, nil
 }
 
-//	NewCorrelationId generates a unique id using the linux tool uuidgen
+//	NewCorrelationId generates a unique id
 func NewCorrelationId() (string, error) {
-	uid, err := exec.Command("uuidgen").Output()
+	data := make([]byte, 10)
+	_, err := rand.Read(data)
 	if err != nil {
 		return "", err
 	}
-	return string(uid), nil
+	h := sha256.Sum256(data)
+	return fmt.Sprintf("%x", string(h[:])), nil
 }
 
 type RabbitCli struct {

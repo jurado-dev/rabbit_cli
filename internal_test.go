@@ -135,3 +135,13 @@ func TestRpc(t *testing.T) {
 
 	t.Logf("obtained rpc response - %s", string(result))
 }
+
+func TestNewCorrelationId(t *testing.T) {
+	correlationId, err := NewCorrelationId()
+	if err != nil {
+		t.Errorf("can't create correlation id - error: %s", err.Error())
+		return
+	}
+
+	t.Logf("Correlation Id created: %s", correlationId)
+}
