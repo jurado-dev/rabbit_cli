@@ -1,6 +1,7 @@
 package rabbit_cli
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/streadway/amqp"
 	"log"
+	"time"
 )
 
 type ExchangeConfig struct {
@@ -248,4 +250,58 @@ func (rc *RabbitCli) MakeRpc(exc ExchangeConfig, msg MessageConfig) ([]byte, err
 	}
 
 	return nil, errors.New("response was not obtained")
+}
+
+func (rc *RabbitCli) MakeRpcWithTimeout(exc ExchangeConfig, msg MessageConfig, timeout time.Duration) ([]byte, error) {
+
+	//	Connecting to rabbit server to create a unique queue
+	con, err := rc.newConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer con.Close()
+
+	channel, err := con.Channel()
+	if err != nil {
+		return nil, err
+	}
+	defer channel.Close()
+
+	//	Creating a new unique queue
+	replyQueue, err := channel.QueueDeclare("", false, false, true, false, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	//	Handling the response messages from the unique queue
+	responses, err := channel.Consume(replyQueue.Name, "", true, true, false, false, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	//	Adding to msg the name of the unique ID
+	msg.ReplyQueue = replyQueue.Name
+
+	//	Publish the message to the exchange
+	err = rc.Publish(exc, msg)
+	if err != nil {
+		return nil, err
+	}
+
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	for {
+		select {
+		case response := <- responses:
+			if response.CorrelationId != msg.CorrelationId {
+				response.Reject(false)
+				return nil, errors.New("RPC failed: correlation id does not match")
+			}
+			return response.Body, nil
+		case <- ctx.Done():
+			return nil, errors.New("RPC failed: timeout reached or ctx canceled")
+		}
+	}
 }
