@@ -68,6 +68,7 @@ type MessageConfig struct {
 	CorrelationId string
 	ReplyQueue    string
 	ContentType   string
+	Type          string
 }
 
 func NewMessageConfig(data interface{}, routeKey string) (MessageConfig, error) {
@@ -81,7 +82,7 @@ func NewMessageConfig(data interface{}, routeKey string) (MessageConfig, error) 
 		return MessageConfig{}, err
 	}
 
-	return MessageConfig{Body: body, RouteKey: routeKey, ContentType: "text/plain", CorrelationId:corId}, nil
+	return MessageConfig{Body: body, RouteKey: routeKey, ContentType: "text/plain", CorrelationId: corId}, nil
 }
 
 //	NewCorrelationId generates a unique id
@@ -144,6 +145,7 @@ func (rc *RabbitCli) Publish(exc ExchangeConfig, msg MessageConfig) error {
 			ReplyTo:       msg.ReplyQueue,
 			ContentType:   msg.ContentType,
 			Body:          msg.Body,
+			Type:          msg.Type,
 		},
 	)
 }
@@ -288,19 +290,18 @@ func (rc *RabbitCli) MakeRpcWithTimeout(exc ExchangeConfig, msg MessageConfig, t
 		return nil, err
 	}
 
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	for {
 		select {
-		case response := <- responses:
+		case response := <-responses:
 			if response.CorrelationId != msg.CorrelationId {
 				response.Reject(false)
 				return nil, errors.New("RPC failed: correlation id does not match")
 			}
 			return response.Body, nil
-		case <- ctx.Done():
+		case <-ctx.Done():
 			return nil, errors.New("RPC failed: timeout reached or ctx canceled")
 		}
 	}
